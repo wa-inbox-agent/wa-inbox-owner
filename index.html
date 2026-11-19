@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>إصدار كود تفعيل — مالك المنصة</title>
+<style>
+  body { font-family: system-ui, 'Segoe UI', Tahoma, sans-serif; background: #0f1e3a; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; }
+  .card { background: #fff; border-radius: 18px; padding: 28px; width: 440px; max-width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  h1 { color: #0f1e3a; font-size: 19px; margin: 0 0 4px; text-align: center; }
+  .sub { color: #777; font-size: 12.5px; text-align: center; margin-bottom: 16px; line-height: 1.8; }
+  label { display: block; font-size: 13px; font-weight: 700; color: #0f1e3a; margin: 12px 0 4px; }
+  input, textarea { width: 100%; border: 1.5px solid #ddd; border-radius: 10px; padding: 10px; font-size: 14px; box-sizing: border-box; }
+  textarea { font-family: monospace; font-size: 11px; direction: ltr; min-height: 110px; resize: vertical; }
+  button { width: 100%; margin-top: 16px; background: #0f1e3a; color: #fff; border: 0; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  #out { margin-top: 16px; background: #f4f2ec; border: 1.5px dashed #c9a227; border-radius: 10px; padding: 12px; font-family: monospace; font-size: 12px; direction: ltr; word-break: break-all; display: none; }
+  #err { color: #b3261e; font-size: 13px; margin-top: 10px; display: none; }
+  #copyBtn { background: #2e7d32; display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🔑 إصدار كود تفعيل</h1>
+  <div class="sub">صفحة خاصة بمالك المنصة فقط. التوقيع يتم على جهازك — المفتاح الخاص لا يغادر هذه الصفحة.</div>
+  <label>كود التثبيت (من شاشة التفعيل عند المشتري)</label>
+  <input type="text" id="iid" dir="ltr" placeholder="مثال: d23fae04" />
+  <label>اسم المشتري / النشاط (يظهر في صفحة الدخول: مرخّصة لـ ...)</label>
+  <input type="text" id="buyer" placeholder="مثال: مؤسسة النخبة للتجارة" />
+  <label>المفتاح الخاص (محفوظ في خزنتك)</label>
+  <textarea id="priv" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+  <button id="gen">إصدار كود التفعيل</button>
+  <div id="err"></div>
+  <div id="out"></div>
+  <button id="copyBtn">نسخ الكود</button>
+</div>
+<script>
+const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+document.getElementById('gen').onclick = async () => {
+  const err = document.getElementById('err');
+  err.style.display = 'none';
+  try {
+    const iid = document.getElementById('iid').value.trim();
+    const buyer = document.getElementById('buyer').value.trim();
+    const pem = document.getElementById('priv').value.trim();
+    if (!iid || !buyer || !pem) throw new Error('أكمل الحقول الثلاثة');
+    const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+    const der = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey('pkcs8', der.buffer, { name: 'Ed25519' }, false, ['sign']);
+    const msg = `wa-inbox-license|${iid}|${buyer}`;
+    const sig = await crypto.subtle.sign({ name: 'Ed25519' }, key, new TextEncoder().encode(msg));
+    const nameB = b64url(new TextEncoder().encode(buyer).buffer);
+    const code = `${nameB}.${b64url(sig)}`;
+    const out = document.getElementById('out');
+    out.textContent = code;
+    out.style.display = 'block';
+    document.getElementById('copyBtn').style.display = 'block';
+  } catch (e) {
+    err.textContent = 'تعذر إصدار الكود: تأكد من المفتاح الخاص الكامل (' + e.message + ')';
+    err.style.display = 'block';
+  }
+};
+document.getElementById('copyBtn').onclick = async () => {
+  await navigator.clipboard.writeText(document.getElementById('out').textContent);
+  document.getElementById('copyBtn').textContent = '✓ تم النسخ';
+};
+</script>
+</body>
+</html>
