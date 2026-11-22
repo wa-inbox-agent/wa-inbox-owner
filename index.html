@@ -26,6 +26,8 @@
   <input type="text" id="iid" dir="ltr" placeholder="مثال: d23fae04" />
   <label>اسم المشتري / النشاط (يظهر في صفحة الدخول: مرخّصة لـ ...)</label>
   <input type="text" id="buyer" placeholder="مثال: مؤسسة النخبة للتجارة" />
+  <label>تاريخ انتهاء الترخيص (افتراضيًا سنة من اليوم، وللتجديد أصدر كودًا جديدًا بتاريخ جديد لنفس كود التثبيت)</label>
+  <input type="date" id="exp" dir="ltr" />
   <label>المفتاح الخاص (محفوظ في خزنتك)</label>
   <textarea id="priv" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
   <button id="gen">إصدار كود التفعيل</button>
@@ -35,6 +37,7 @@
 </div>
 <script>
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+document.getElementById('exp').value = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
 document.getElementById('gen').onclick = async () => {
   const err = document.getElementById('err');
   err.style.display = 'none';
@@ -42,14 +45,16 @@ document.getElementById('gen').onclick = async () => {
     const iid = document.getElementById('iid').value.trim();
     const buyer = document.getElementById('buyer').value.trim();
     const pem = document.getElementById('priv').value.trim();
+    const exp = document.getElementById('exp').value;
     if (!iid || !buyer || !pem) throw new Error('أكمل الحقول الثلاثة');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(exp)) throw new Error('حدد تاريخ انتهاء الترخيص');
     const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
     const der = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     const key = await crypto.subtle.importKey('pkcs8', der.buffer, { name: 'Ed25519' }, false, ['sign']);
-    const msg = `wa-inbox-license|${iid}|${buyer}`;
+    const msg = `wa-inbox-license|${iid}|${buyer}|${exp}`;
     const sig = await crypto.subtle.sign({ name: 'Ed25519' }, key, new TextEncoder().encode(msg));
     const nameB = b64url(new TextEncoder().encode(buyer).buffer);
-    const code = `${nameB}.${b64url(sig)}`;
+    const code = `${nameB}.${exp}.${b64url(sig)}`;
     const out = document.getElementById('out');
     out.textContent = code;
     out.style.display = 'block';
